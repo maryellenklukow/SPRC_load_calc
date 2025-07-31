@@ -3,6 +3,7 @@ library(dplyr)
 library(tidyverse)
 library(readr)
 library(measurements)
+library(rvest)
 
 #####################################
 ## SPRC ##
@@ -22,6 +23,18 @@ SPRC_volume <- read.csv(SPRC_hobo_file) %>%
          "datetime",
          "water_level_m")
 SPRC_volume$datetime <- as.POSIXct(SPRC_volume$datetime, format = "%m/%d/%Y %H:%M")
+
+# VOLUME FROM SOLINST DATA
+SPRC_solinst_url <- "https://github.com/h2ohio-wmp/data-upload/tree/main/manual_sensors/distributed"
+
+SPRC_02_sol_files <- #read in all files that start with WS_SPRC_02_h2ohio
+  #bind all together
+  #change column names to match datetime and water_level_m
+  #pull out unusable data according to Morgan's notes
+  
+SPRC_04_sol_files <- #read in all files that start with WS_SPRC_04_h2ohio
+  #bind all together
+  #change column names to match datetime and water_level_m
 
 #set HOBO elevations (elevation when HOBO water level (m) = 0)
 #THESE ARE CURRENTLY GUESSTIMATES AND SHOULD BE UPDATED
