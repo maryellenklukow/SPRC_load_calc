@@ -1,3 +1,6 @@
+################## THIS IS KENNY'S SCRIPT FOR REFERENCE #######################
+
+
 setwd("C:/Users/kande/OneDrive - Kent State University/Current Projects/Manuscript Ideas/CONNECTIVITY PAPER")
 library(dplyr)
 library(lubridate)
