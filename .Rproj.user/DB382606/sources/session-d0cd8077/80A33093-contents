@@ -27,7 +27,7 @@ SPRC_HOBO_volume$datetime <-
   as.POSIXct(SPRC_HOBO_volume$datetime, format = "%m/%d/%Y")
 
 #SPRC_02 water level from Solinst data (Solinsts 8 and 26)
-
+    #waiting on WS response, so this section and "combine SPRC_02..." unusable
 
 #SPRC_04 water level from Solinst data (Solinst 6)
 SPRC_04_sol_file <- "WS_SPRC_04_h2ohio_wll06_proc-comb.csv"
@@ -40,12 +40,31 @@ SPRC_04_sol$datetime <-
   as.POSIXct(SPRC_04_sol$datetime, format = "%m/%d/%Y")
 
 #combine SPRC_02 HOBO and Solinst data
-#pull out unusable dates from Morgan
-#set elevations for different dates
+#pull out unusable Solinst dates from Morgan
+#pull out HOBO data from North Pool
+#set sensor elevations from data from Morgan
+#group by date and find average daily water level
+#calc water elevation in feet by converting units and adding sensor elevation
+  #elevation_ft = conv_unit(water_level_m, "m", "ft") + SPRC_02_HOBO_el,
+#calc average daily volumes in gallons with WS equation
+  #volume_gal = (3866.66 * (elevation_ft ^ 3)) 
+  #- (9492338.86 * (elevation_ft ^ 2)) 
+  #+ (7767632310.25 * elevation_ft) 
+  #- 2118762457458.17,
+#convert daily volumes in gallons to L
+  #volume_L = conv_unit(volume_gal, "us_gal", "L")) %>%
+  #calc daily change in volume by subtracting current day volume by previous day
+  arrange(datetime) %>%
+  mutate(vol_diff = volume_L - lag(volume_L, default = first(volume_L))) %>%
+  #sum the positive volume changes per month
+  mutate(date = as.factor(format(as.Date(datetime, format = "%m/%d/%Y"), "%m/%Y"))) %>%
+  filter(vol_diff > 0) %>%
+  group_by(date) %>%
+  summarise(inflow_vol_L = sum(vol_diff, na.rm = TRUE))
 
 #combine SPRC_04 HOBO and Solinst data
 SPRC_04_volume <- SPRC_HOBO_volume %>%
-  #pull out HOBO from second treatment train
+  #pull out HOBO from South Pool
   filter(location == "SPRC_04") %>%
   #combine two dfs
   rbind(SPRC_04_sol) %>%
