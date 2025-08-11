@@ -3,7 +3,6 @@ library(dplyr)
 library(tidyverse)
 library(readr)
 library(measurements)
-library(rvest)
 
 #####################################
 ## SPRC ##
@@ -16,25 +15,21 @@ library(rvest)
 #inlet SPRC_01 to outlet SPRC_02; then inlet SPRC_03 to outlet SPRC_04
 ## UPDATE CSVs TO MOST RECENT RELEASE BEFORE RUNNING
 
-# VOLUME FROM HOBO DATA 
-SPRC_hobo_file <- "SPRC_hobo_WY25-v1.0_20250722.csv" #UPDATE THIS EACH TIME
+#merge HOBO and Solinst data to find water level (m) for SPRC 02 and SPRC 04
+
+#water level from HOBO data
+SPRC_hobo_file <- "SPRC_hobo_WY25-v1.0_20250722.csv"
 SPRC_HOBO_volume <- read.csv(SPRC_hobo_file) %>%
   select("location",
          "datetime",
          "water_level_m")
 SPRC_HOBO_volume$datetime <- 
-  as.POSIXct(SPRC_HOBO_volume$datetime, format = "%m/%d/%Y %H:%M")
+  as.POSIXct(SPRC_HOBO_volume$datetime, format = "%m/%d/%Y")
 
-# VOLUME FROM SOLINST DATA
-#data currently in https://github.com/h2ohio-wmp/data-upload/blob/main/_scripts/combine-distributed-files.R
-#all the SOlinst code will need to be changed over to Data Portal code when 
-#data moves over there
+#SPRC_02 water level from Solinst data (Solinsts 8 and 26)
 
-SPRC_02_sol_file <- #read in all files that start with WS_SPRC_02_h2ohio
-  #bind all together
-  #change column names to match datetime and water_level_m
-  #pull out unusable data according to Morgan's notes
-  
+
+#SPRC_04 water level from Solinst data (Solinst 6)
 SPRC_04_sol_file <- "WS_SPRC_04_h2ohio_wll06_proc-comb.csv"
 SPRC_04_sol <- read.csv(SPRC_04_sol_file) %>%
   select("datetime",
@@ -42,56 +37,41 @@ SPRC_04_sol <- read.csv(SPRC_04_sol_file) %>%
   rename_at("LEVEL", ~"water_level_m") %>%
   mutate(location = "SPRC_04")
 SPRC_04_sol$datetime <- 
-  as.POSIXct(SPRC_04_sol$datetime, format = "%m/%d/%Y %H:%M")
+  as.POSIXct(SPRC_04_sol$datetime, format = "%m/%d/%Y")
 
+#combine SPRC_02 HOBO and Solinst data
+#pull out unusable dates from Morgan
+#set elevations for different dates
 
-#set HOBO elevations (elevation when HOBO water level (m) = 0)
-#THESE ARE CURRENTLY GUESSTIMATES AND SHOULD BE UPDATED
-SPRC_02_HOBO_el <- 822
-SPRC_04_HOBO_el <- 822.5
-
-#create df for outlet 2's monthly volume change using WS's equation
-SPRC_02_volume <- SPRC_HOBO_volume %>%
-  #pull out HOBO in first treatment train
-  filter(location == "SPRC_02") %>%
-  #convert from water level (m) to elevation (ft), elev to volume
-  mutate(elevation_ft = conv_unit(water_level_m, "m", "ft") + SPRC_02_HOBO_el,
-         volume_gal = (3866.66 * (elevation_ft ^ 3)) 
-         - (9492338.86 * (elevation_ft ^ 2)) 
-         + (7767632310.25 * elevation_ft) 
-         - 2118762457458.17,
-         volume_L = conv_unit(volume_gal, "us_gal", "L")) %>%
-  arrange(datetime) %>%
-  mutate(vol_diff = volume_L - lag(volume_L, default = first(volume_L))) %>%
-  mutate(date = as.factor(format(as.Date(datetime, format = "%m/%d/%Y"), "%m/%Y"))) %>%
-  filter(vol_diff > 0) %>%
-  group_by(date) %>%
-  summarise(inflow_vol_L = sum(vol_diff, na.rm = TRUE))
-
-#create df for outlet 4's monthly volume change using WS's equation
+#combine SPRC_04 HOBO and Solinst data
 SPRC_04_volume <- SPRC_HOBO_volume %>%
   #pull out HOBO from second treatment train
   filter(location == "SPRC_04") %>%
+  #combine two dfs
   rbind(SPRC_04_sol) %>%
-  #convert from water level (m) to elevation (ft), elev to volume
-  summarise(water_level_m = mean(water_level_m))
-  mutate(elevation_ft = conv_unit(water_level_m, "m", "ft") + SPRC_04_HOBO_el,
-         volume_gal = (9317.5701086139 * (elevation_ft ^ 3))
-         - (22816397.8919351 * (elevation_ft ^ 2))
-         + (18623801908.7201 * elevation_ft)
-         - 5067181357823.19,
-         volume_L = conv_unit(volume_gal, "us_gal", "L")) %>%
-  #arrange the df by datetime and find the water level change through time
+  #group by date and find average daily water level
+  group_by(datetime) %>%
+  summarise(water_level_m = mean(water_level_m)) %>%
+  #calc water elevation in feet by converting units and adding sensor elevation
+  mutate(elevation_ft = conv_unit(water_level_m, "m", "ft") + 822.5,
+      #calc average daily volumes in gallons with WS equation
+       volume_gal = (9317.5701086139 * (elevation_ft ^ 3))
+       - (22816397.8919351 * (elevation_ft ^ 2))
+       + (18623801908.7201 * elevation_ft)
+       - 5067181357823.19,
+      #convert daily volumes in gallons to L
+       volume_L = conv_unit(volume_gal, "us_gal", "L")) %>%
+  #calc daily change in volume by subtracting current day volume by previous day
   arrange(datetime) %>%
   mutate(vol_diff = volume_L - lag(volume_L, default = first(volume_L))) %>%
-  #add all positive water level changes per month
+  #sum the positive volume changes per month
   mutate(date = as.factor(format(as.Date(datetime, format = "%m/%d/%Y"), "%m/%Y"))) %>%
   filter(vol_diff > 0) %>%
   group_by(date) %>%
   summarise(inflow_vol_L = sum(vol_diff, na.rm = TRUE))
 
 
-## NUTRIENT CONCENTRATION ##
+## SPRC Nutrients ##
 SPRC_nutrient_file <- "SPRC_surface_water_nutrient_WY25-v1.0_20250721.csv"
 SPRC_conc_df <- read.csv(SPRC_nutrient_file)
 head(SPRC_conc_df)
@@ -124,7 +104,7 @@ matched_loc <-
   mutate(loc_coords = lois.centroids.sf[nearest_id, 'loi_id']$loi_id, 
          loc_coords_name = lois.centroids.sf[nearest_id, 'loi_name']$loi_name)
 
-#create monthyl concentrations by LOI
+#create monthly concentrations by LOI
 SPRC_nutrients <- matched_loc %>%
   separate(datetime, c("date", "time"), sep = " ") %>%
   mutate(date = as.factor(format(as.Date(date, format = "%m/%d/%Y"), "%m/%Y"))) %>%
@@ -141,6 +121,9 @@ SPRC_nutrients <- matched_loc %>%
             FUN = mean,
             na.rm = TRUE)
 
+
+## SPRC Load Calculation ##
+
 #use Olivia's for-loop to make a df of each LOI
 loc <- c("SPRC_01", "SPRC_02", "SPRC_03", "SPRC_04")
 for(i in 1:length(loc)){
@@ -149,8 +132,7 @@ for(i in 1:length(loc)){
 }
 
 
-
-#calculate first TT load (TT1)
+#calculate North Pool (NP) load
 #calculate load at the inlet
 SPRC_01_nut <- merge(SPRC_01_nut, SPRC_02_volume, by = "date")
 SPRC_01_nut <- SPRC_01_nut %>%
@@ -168,17 +150,17 @@ SPRC_02_nut <- SPRC_02_nut %>%
          lbsOUT_tn_mgL:lbsOUT_drp_mgL)
 
 #combine and find retained
-SPRC_TT1_load <- SPRC_01_nut %>%
+SPRC_NP_load <- SPRC_01_nut %>%
   merge(SPRC_02_nut, by = "date") %>%
-  mutate(TT1_Nfiltered_lbs = lbsIN_tn_mgL - lbsOUT_tn_mgL,
-         TT1_Pfiltered_lbs = lbsIN_tp_mgL - lbsOUT_tp_mgL,
-         TT1_NOxfiltered_lbs = lbsIN_nitrate_nitrite_mgL - lbsOUT_nitrate_nitrite_mgL,
-         TT1_NH4filtered_lbs = lbsIN_total_ammonia_mgL - lbsOUT_total_ammonia_mgL,
-         TT1_DRPfiltered_lbs = lbsIN_drp_mgL - lbsOUT_drp_mgL) %>%
+  mutate(NP_Nfiltered_lbs = lbsIN_tn_mgL - lbsOUT_tn_mgL,
+         NP_Pfiltered_lbs = lbsIN_tp_mgL - lbsOUT_tp_mgL,
+         NP_NOxfiltered_lbs = lbsIN_nitrate_nitrite_mgL - lbsOUT_nitrate_nitrite_mgL,
+         NP_NH4filtered_lbs = lbsIN_total_ammonia_mgL - lbsOUT_total_ammonia_mgL,
+         NP_DRPfiltered_lbs = lbsIN_drp_mgL - lbsOUT_drp_mgL) %>%
   select(date,
-         TT1_Nfiltered_lbs:TT1_DRPfiltered_lbs)
+         NP_Nfiltered_lbs:NP_DRPfiltered_lbs)
 
-#calculate second TT load (TT2)
+#calculate South Pool (SP) load
 #calculate load at the inlet
 SPRC_03_nut <- merge(SPRC_03_nut, SPRC_04_volume, by = "date")
 SPRC_03_nut <- SPRC_03_nut %>%
@@ -196,24 +178,27 @@ SPRC_04_nut <- SPRC_04_nut %>%
          lbsOUT_tn_mgL:lbsOUT_drp_mgL)
 
 #combine and find retained
-SPRC_TT2_load <- SPRC_03_nut %>%
+SPRC_SP_load <- SPRC_03_nut %>%
   merge(SPRC_04_nut, by = "date") %>%
-  mutate(TT2_Nfiltered_lbs = lbsIN_tn_mgL - lbsOUT_tn_mgL,
-         TT2_Pfiltered_lbs = lbsIN_tp_mgL - lbsOUT_tp_mgL,
-         TT2_NOxfiltered_lbs = lbsIN_nitrate_nitrite_mgL - lbsOUT_nitrate_nitrite_mgL,
-         TT2_NH4filtered_lbs = lbsIN_total_ammonia_mgL - lbsOUT_total_ammonia_mgL,
-         TT2_DRPfiltered_lbs = lbsIN_drp_mgL - lbsOUT_drp_mgL) %>%
+  mutate(SP_Nfiltered_lbs = lbsIN_tn_mgL - lbsOUT_tn_mgL,
+         SP_Pfiltered_lbs = lbsIN_tp_mgL - lbsOUT_tp_mgL,
+         SP_NOxfiltered_lbs = lbsIN_nitrate_nitrite_mgL - lbsOUT_nitrate_nitrite_mgL,
+         SP_NH4filtered_lbs = lbsIN_total_ammonia_mgL - lbsOUT_total_ammonia_mgL,
+         SP_DRPfiltered_lbs = lbsIN_drp_mgL - lbsOUT_drp_mgL) %>%
   select(date,
-         TT2_Nfiltered_lbs:TT2_DRPfiltered_lbs)
+         SP_Nfiltered_lbs:SP_DRPfiltered_lbs)
 
-#combine both TTs
-SPRC_load <- merge(SPRC_TT1_load, SPRC_TT2_load, by = "date", all = TRUE)
+#combine both pools' lbs filtered
+SPRC_load <- merge(SPRC_NP_load, SPRC_NP_load, by = "date", all = TRUE)
 SPRC_load <- SPRC_load %>%
   replace(is.na(.), 0) %>%
-  mutate(Nfiltered_lbs = TT1_Nfiltered_lbs - TT2_Nfiltered_lbs,
-         Pfiltered_lbs = TT1_Pfiltered_lbs - TT2_Pfiltered_lbs,
-         NOxfiltered_lbs = TT1_NOxfiltered_lbs - TT2_NOxfiltered_lbs,
-         NH4filtered_lbs = TT1_NH4filtered_lbs - TT2_NH4filtered_lbs,
-         DRPfiltered_lbs = TT1_DRPfiltered_lbs - TT2_DRPfiltered_lbs) %>%
+  #add lbs filtered from both pools
+  mutate(Nfiltered_lbs = NP_Nfiltered_lbs + SP_Nfiltered_lbs,
+         Pfiltered_lbs = NP_Pfiltered_lbs + SP_Pfiltered_lbs,
+         NOxfiltered_lbs = NP_NOxfiltered_lbs + SP_NOxfiltered_lbs,
+         NH4filtered_lbs = NP_NH4filtered_lbs + SP_NH4filtered_lbs,
+         DRPfiltered_lbs = NP_DRPfiltered_lbs + SP_DRPfiltered_lbs) %>%
   select(date,
          Nfiltered_lbs:DRPfiltered_lbs)
+
+

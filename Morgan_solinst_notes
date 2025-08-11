@@ -7,3 +7,17 @@ a new solinst was deployed in north pool on 4/17/24 and a correction factor of 2
 north pool solinst was moved back to original location 6/18/24 so correction factor of 2.15ft is no longer used
 north pool solinst was frozen and broke 11/29/23 to 3/10/25 so depths are not useable. new solinst deployed 3/10/25
 when north pool solinst was replaced after downloading, it was not placed on pool bottom. an offset of 59.72cm was added to the depth from 5/28/25 to 6/16/25
+
+Slack message with Morgan 8/11/2025
+Water level loggers (Solinst) numbers that are matched to Springcreek North Pool and South Pool
+
+13 is the barologger
+8 and 26 are north pool
+6 is south pool
+I think 18 should probably be labeled 8... assuming it was named incorrectly because I don't think we have a #18 solinst
+
+
+Review of North Pool files with Morgan's answer:
+8 and 26 used at different times; one was replaced with the other due to sensor malfunction
+8 goes from 11/29/2023 to 4/23/25
+26 goes from 3/10/25 to 6/16/25
