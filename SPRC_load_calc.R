@@ -27,8 +27,28 @@ SPRC_HOBO_volume$datetime <-
   as.POSIXct(SPRC_HOBO_volume$datetime, format = "%m/%d/%Y")
 
 #SPRC_02 water level from Solinst data (Solinsts 8 and 26)
-    #waiting on WS response, so this section and "combine SPRC_02..." unusable
+SPRC_wll8 <- read.csv("WS_SPRC_02_h2ohio_wll08_proc-comb.csv")
+SPRC_wll26 <- read.csv("WS_SPRC_02_h2ohio_wll26_proc-comb.csv")
+SPRC_02_sol <- rbind(SPRC_wll8, SPRC_wll26) %>%
+  select("datetime",
+         "LEVEL") %>%
+  rename_at("LEVEL", ~"water_level_m") %>%
+  mutate(location = "SPRC_02")
+SPRC_02_sol$datetime <- 
+  as.POSIXct(SPRC_02_sol$datetime, format = "%m/%d/%Y")
 
+###############################################################################
+#THIS IS ALL NOT WORKING, COME BACK TO IT LATER
+#set unusable dates by adding here
+unusable1 <- seq(as.Date("2023-12-11"), as.Date("2023-12-16"), by = "day")
+unusable2 <- seq(as.Date("2024-04-03"), as.Date("2024-04-17"), by = "day")
+unusable3 <- seq(as.Date("2024-11-29"), as.Date("2025-03-10"), by = "day")
+
+unusable_dates <- c(unusable1, unusable2, unusable3)
+
+SPRC_02_sol <- subset(SPRC_02_sol, !(datetime %in% unusable_dates))
+###############################################################################
+                                       
 #SPRC_04 water level from Solinst data (Solinst 6)
 SPRC_04_sol_file <- "WS_SPRC_04_h2ohio_wll06_proc-comb.csv"
 SPRC_04_sol <- read.csv(SPRC_04_sol_file) %>%
