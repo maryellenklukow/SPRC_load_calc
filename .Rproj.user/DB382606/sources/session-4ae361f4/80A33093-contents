@@ -35,7 +35,7 @@ SPRC_02_sol <- rbind(SPRC_wll8, SPRC_wll26) %>%
   rename_at("LEVEL", ~"water_level_m") %>%
   mutate(location = "SPRC_02")
 SPRC_02_sol$datetime <- 
-  as.POSIXct(SPRC_02_sol$datetime, format = "%m/%d/%Y", tz = "EST")
+  as.POSIXct(SPRC_02_sol$datetime, format = "%m/%d/%Y")
 
 #set unusable dates and remove
 unusable1 <- seq(as.Date("2023-12-11"), as.Date("2023-12-16"), by = "day")
@@ -44,16 +44,6 @@ unusable3 <- seq(as.Date("2024-11-29"), as.Date("2025-03-10"), by = "day")
 unusable_dates <- c(unusable1, unusable2, unusable3)
 SPRC_02_sol <- SPRC_02_sol %>%
   filter(!as.Date(datetime) %in% unusable_dates)
-                                       
-#SPRC_04 water level from Solinst data (Solinst 6)
-SPRC_04_sol_file <- "WS_SPRC_04_h2ohio_wll06_proc-comb.csv"
-SPRC_04_sol <- read.csv(SPRC_04_sol_file) %>%
-  select("datetime",
-         "LEVEL") %>%
-  rename_at("LEVEL", ~"water_level_m") %>%
-  mutate(location = "SPRC_04")
-SPRC_04_sol$datetime <- 
-  as.POSIXct(SPRC_04_sol$datetime, format = "%m/%d/%Y", tz = "EST")
 
 #combine SPRC_02 HOBO and Solinst data
 SPRC_02_volume <- SPRC_HOBO_volume %>%
@@ -61,22 +51,20 @@ SPRC_02_volume <- SPRC_HOBO_volume %>%
   filter(location == "SPRC_02") %>%
   #combine two dfs
   rbind(SPRC_02_sol)
+SPRC_02_volume$datetime <- SPRC_02_volume$datetime %>% as.Date()
 #set sensor elevations from data from Morgan
 el_change1 <- seq(as.Date("2024-04-17"), as.Date("2024-06-18"), by = "day")
 el_change2 <- seq(as.Date("2025-05-28"), as.Date("2025-06-16"), by = "day")
-#this function does not operate yet, I need to go back through and relearn
-#if else functions
-set_el <- function(x) {
-  if (x %in% el_change1, 824.15),
-  if (x %in% el_change2, 823. 96),
-  else 822
-}
+
 #combine HOBO and Solinst data for North Pool
 SPRC_02_volume <- SPRC_02_volume %>%
-  mutate(sensor_el = set_el(datetime)) %>%
   #group by date and find average daily water level
   group_by(datetime) %>%
   summarise(water_level_m = mean(water_level_m)) %>%
+  #set sensor elevations
+  mutate(sensor_el = case_when(datetime %in% as.Date(el_change1) ~ as.numeric(824.15),
+                               datetime %in% as.Date(el_change2) ~ as.numeric(823.96),
+                               .default = as.numeric(822))) %>%
   #calc water elevation in feet by converting units and adding sensor elevation
   mutate(elevation_ft = conv_unit(water_level_m, "m", "ft") + sensor_el,
          #calc average daily volumes in gallons with WS equation
@@ -94,6 +82,16 @@ SPRC_02_volume <- SPRC_02_volume %>%
   filter(vol_diff > 0) %>%
   group_by(date) %>%
   summarise(inflow_vol_L = sum(vol_diff, na.rm = TRUE))
+
+#SPRC_04 water level from Solinst data (Solinst 6)
+SPRC_04_sol_file <- "WS_SPRC_04_h2ohio_wll06_proc-comb.csv"
+SPRC_04_sol <- read.csv(SPRC_04_sol_file) %>%
+  select("datetime",
+         "LEVEL") %>%
+  rename_at("LEVEL", ~"water_level_m") %>%
+  mutate(location = "SPRC_04")
+SPRC_04_sol$datetime <- 
+  as.POSIXct(SPRC_04_sol$datetime, format = "%m/%d/%Y")
 
 #combine HOBO and Solinst data for South Pool
 SPRC_04_volume <- SPRC_HOBO_volume %>%
@@ -170,8 +168,8 @@ SPRC_nutrients <- matched_loc %>%
          drp_mgL) %>%
   #average monthly concentrations
   aggregate(. ~ date + loc_coords,
-            FUN = mean,
-            na.rm = TRUE)
+            FUN = mean)
+#this is taking out all rows with even one NA, so not sure what to do here
 
 
 ## SPRC Load Calculation ##
@@ -241,7 +239,7 @@ SPRC_SP_load <- SPRC_03_nut %>%
          SP_Nfiltered_lbs:SP_DRPfiltered_lbs)
 
 #combine both pools' lbs filtered
-SPRC_load <- merge(SPRC_NP_load, SPRC_NP_load, by = "date", all = TRUE)
+SPRC_load <- merge(SPRC_NP_load, SPRC_SP_load, by = "date", all = TRUE)
 SPRC_load <- SPRC_load %>%
   replace(is.na(.), 0) %>%
   #add lbs filtered from both pools
@@ -252,5 +250,36 @@ SPRC_load <- SPRC_load %>%
          DRPfiltered_lbs = NP_DRPfiltered_lbs + SP_DRPfiltered_lbs) %>%
   select(date,
          Nfiltered_lbs:DRPfiltered_lbs)
+
+WY23 <- c("10/2022",
+          "11/2022",
+          "12/2022",
+          "01/2023",
+          "02/2023",
+          "03/2023",
+          "04/2023",
+          "04/2023",
+          "04/2023",
+          "07/2023",
+          "08/2023",
+          "09/2023")
+SPRC_WY23 <- SPRC_load %>%
+  filter(date %in% WY23)
+
+WY24 <- c("10/2023",
+          "11/2023",
+          "12/2023",
+          "01/2024",
+          "02/2024",
+          "03/2024",
+          "04/2024",
+          "04/2024",
+          "04/2024",
+          "07/2024",
+          "08/2024",
+          "09/2024")
+SPRC_WY24 <- SPRC_load %>%
+  filter(date %in% WY24)
+
 
 
