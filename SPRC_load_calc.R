@@ -35,19 +35,22 @@ SPRC_02_sol <- rbind(SPRC_wll8, SPRC_wll26) %>%
   rename_at("LEVEL", ~"water_level_m") %>%
   mutate(location = "SPRC_02")
 SPRC_02_sol$datetime <- 
-  as.POSIXct(SPRC_02_sol$datetime, format = "%m/%d/%Y")
+  as.POSIXct(SPRC_02_sol$datetime, format = "%m/%d/%Y", tz = "EST")
 
-###############################################################################
-#THIS IS ALL NOT WORKING, COME BACK TO IT LATER
-#set unusable dates by adding here
+#set unusable dates and remove
 unusable1 <- seq(as.Date("2023-12-11"), as.Date("2023-12-16"), by = "day")
 unusable2 <- seq(as.Date("2024-04-03"), as.Date("2024-04-17"), by = "day")
 unusable3 <- seq(as.Date("2024-11-29"), as.Date("2025-03-10"), by = "day")
-
 unusable_dates <- c(unusable1, unusable2, unusable3)
+SPRC_02_sol <- SPRC_02_sol %>%
+  filter(!as.Date(datetime) %in% unusable_dates)
 
-SPRC_02_sol <- subset(SPRC_02_sol, !(datetime %in% unusable_dates))
-###############################################################################
+#set elevations to account for Solinst changes
+SPRC_02_sol <- SPRC_02_sol %>% 
+  mutate(sensor_el = )
+#822 unless:
+#824.15 2024-04-17 through 2024-06-18
+#823.96 2025-05-28 to 2025-06-16
                                        
 #SPRC_04 water level from Solinst data (Solinst 6)
 SPRC_04_sol_file <- "WS_SPRC_04_h2ohio_wll06_proc-comb.csv"
@@ -57,7 +60,7 @@ SPRC_04_sol <- read.csv(SPRC_04_sol_file) %>%
   rename_at("LEVEL", ~"water_level_m") %>%
   mutate(location = "SPRC_04")
 SPRC_04_sol$datetime <- 
-  as.POSIXct(SPRC_04_sol$datetime, format = "%m/%d/%Y")
+  as.POSIXct(SPRC_04_sol$datetime, format = "%m/%d/%Y", tz = "EST")
 
 #combine SPRC_02 HOBO and Solinst data
 #pull out unusable Solinst dates from Morgan
@@ -65,7 +68,7 @@ SPRC_04_sol$datetime <-
 #set sensor elevations from data from Morgan
 #group by date and find average daily water level
 #calc water elevation in feet by converting units and adding sensor elevation
-  #elevation_ft = conv_unit(water_level_m, "m", "ft") + SPRC_02_HOBO_el,
+  #elevation_ft = conv_unit(water_level_m, "m", "ft") + sensor_el,
 #calc average daily volumes in gallons with WS equation
   #volume_gal = (3866.66 * (elevation_ft ^ 3)) 
   #- (9492338.86 * (elevation_ft ^ 2)) 
