@@ -44,13 +44,6 @@ unusable3 <- seq(as.Date("2024-11-29"), as.Date("2025-03-10"), by = "day")
 unusable_dates <- c(unusable1, unusable2, unusable3)
 SPRC_02_sol <- SPRC_02_sol %>%
   filter(!as.Date(datetime) %in% unusable_dates)
-
-#set elevations to account for Solinst changes
-SPRC_02_sol <- SPRC_02_sol %>% 
-  mutate(sensor_el = )
-#822 unless:
-#824.15 2024-04-17 through 2024-06-18
-#823.96 2025-05-28 to 2025-06-16
                                        
 #SPRC_04 water level from Solinst data (Solinst 6)
 SPRC_04_sol_file <- "WS_SPRC_04_h2ohio_wll06_proc-comb.csv"
@@ -63,19 +56,36 @@ SPRC_04_sol$datetime <-
   as.POSIXct(SPRC_04_sol$datetime, format = "%m/%d/%Y", tz = "EST")
 
 #combine SPRC_02 HOBO and Solinst data
-#pull out unusable Solinst dates from Morgan
-#pull out HOBO data from North Pool
+SPRC_02_volume <- SPRC_HOBO_volume %>%
+  #pull out HOBO from North Pool
+  filter(location == "SPRC_02") %>%
+  #combine two dfs
+  rbind(SPRC_02_sol)
 #set sensor elevations from data from Morgan
-#group by date and find average daily water level
-#calc water elevation in feet by converting units and adding sensor elevation
-  #elevation_ft = conv_unit(water_level_m, "m", "ft") + sensor_el,
-#calc average daily volumes in gallons with WS equation
-  #volume_gal = (3866.66 * (elevation_ft ^ 3)) 
-  #- (9492338.86 * (elevation_ft ^ 2)) 
-  #+ (7767632310.25 * elevation_ft) 
-  #- 2118762457458.17,
-#convert daily volumes in gallons to L
-  #volume_L = conv_unit(volume_gal, "us_gal", "L")) %>%
+el_change1 <- seq(as.Date("2024-04-17"), as.Date("2024-06-18"), by = "day")
+el_change2 <- seq(as.Date("2025-05-28"), as.Date("2025-06-16"), by = "day")
+#this function does not operate yet, I need to go back through and relearn
+#if else functions
+set_el <- function(x) {
+  if (x %in% el_change1, 824.15),
+  if (x %in% el_change2, 823. 96),
+  else 822
+}
+#combine HOBO and Solinst data for North Pool
+SPRC_02_volume <- SPRC_02_volume %>%
+  mutate(sensor_el = set_el(datetime)) %>%
+  #group by date and find average daily water level
+  group_by(datetime) %>%
+  summarise(water_level_m = mean(water_level_m)) %>%
+  #calc water elevation in feet by converting units and adding sensor elevation
+  mutate(elevation_ft = conv_unit(water_level_m, "m", "ft") + sensor_el,
+         #calc average daily volumes in gallons with WS equation
+         volume_gal = (3866.66 * (elevation_ft ^ 3)) 
+         - (9492338.86 * (elevation_ft ^ 2)) 
+         + (7767632310.25 * elevation_ft) 
+         - 2118762457458.17, 
+         #convert daily volumes in gallons to L
+         volume_L = conv_unit(volume_gal, "us_gal", "L")) %>%
   #calc daily change in volume by subtracting current day volume by previous day
   arrange(datetime) %>%
   mutate(vol_diff = volume_L - lag(volume_L, default = first(volume_L))) %>%
@@ -85,7 +95,7 @@ SPRC_04_sol$datetime <-
   group_by(date) %>%
   summarise(inflow_vol_L = sum(vol_diff, na.rm = TRUE))
 
-#combine SPRC_04 HOBO and Solinst data
+#combine HOBO and Solinst data for South Pool
 SPRC_04_volume <- SPRC_HOBO_volume %>%
   #pull out HOBO from South Pool
   filter(location == "SPRC_04") %>%
